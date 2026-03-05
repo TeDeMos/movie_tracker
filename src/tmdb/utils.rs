@@ -10,7 +10,7 @@ use {
     thiserror::Error,
 };
 
-const DEBUG: &str = "/home/tedem/dev/RustroverProjects/movie_tracker/src/temp";
+const DEBUG: &str = "/home/tedem/dev/RustroverProjects/movie_tracker/src/temp.json";
 
 #[derive(Error, Debug)]
 pub enum DebugJsonError {
@@ -40,10 +40,8 @@ impl ResponseExt for Response {
 
 pub fn maybe_date<'de, D>(deserializer: D) -> Result<Option<NaiveDate>, D::Error>
 where D: Deserializer<'de> {
-    let s = String::deserialize(deserializer)?;
-    if s.is_empty() {
-        Ok(None)
-    } else {
-        NaiveDate::parse_from_str(&s, "%Y-%m-%d").map(Some).map_err(D::Error::custom)
+    match Option::<String>::deserialize(deserializer)?.as_deref() {
+        None | Some("") => Ok(None),
+        Some(s) => NaiveDate::parse_from_str(s, "%Y-%m-%d").map(Some).map_err(D::Error::custom),
     }
 }
