@@ -2,10 +2,10 @@ use {crate::tmdb::utils::maybe_date, chrono::NaiveDate, serde::Deserialize};
 
 #[derive(Deserialize, Debug)]
 pub struct Paginated<T> {
-    page: i32,
-    results: Vec<T>,
-    total_pages: i32,
-    total_results: i32,
+    pub page: i32,
+    pub results: Vec<T>,
+    pub total_pages: i32,
+    pub total_results: i32,
 }
 
 #[derive(Deserialize, Debug)]
@@ -231,12 +231,12 @@ pub struct SearchMovie {
     genre_ids: Vec<i32>,
     id: i32,
     original_language: String,
-    original_title: String,
+    pub original_title: String,
     overview: String,
     popularity: f32,
     poster_path: Option<String>,
     #[serde(deserialize_with = "maybe_date")]
-    release_date: Option<NaiveDate>,
+    pub release_date: Option<NaiveDate>,
     title: String,
     video: bool,
     vote_average: f32,

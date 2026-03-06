@@ -10,7 +10,7 @@ use {
     thiserror::Error,
 };
 
-const DEBUG: &str = "/home/tedem/dev/RustroverProjects/movie_tracker/src/temp.json";
+pub const DEBUG: &str = "/home/tedem/dev/RustroverProjects/movie_tracker/src/temp.json";
 
 #[derive(Error, Debug)]
 pub enum DebugJsonError {
