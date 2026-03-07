@@ -232,7 +232,7 @@ pub struct SearchMovie {
     id: i32,
     original_language: String,
     pub original_title: String,
-    overview: String,
+    pub overview: String,
     popularity: f32,
     poster_path: Option<String>,
     #[serde(deserialize_with = "maybe_date")]
