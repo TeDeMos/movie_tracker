@@ -9,49 +9,19 @@ pub struct Paginated<T> {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct AggregateCastMember {
-    adult: bool,
-    gender: i32,
-    id: i32,
-    known_for_department: String,
-    name: String,
-    original_name: String,
-    popularity: f32,
-    profile_path: Option<String>,
-    roles: Vec<Role>,
-    total_episode_count: i32,
-    order: i32,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct AggregateCrewMember {
-    adult: bool,
-    gender: i32,
-    id: i32,
-    known_for_department: String,
-    name: String,
-    original_name: String,
-    popularity: f32,
-    profile_path: Option<String>,
-    jobs: Vec<Job>,
-    department: String,
-    total_episode_count: i32,
-}
-
-#[derive(Deserialize, Debug)]
 pub struct CastMember {
     adult: bool,
     gender: i32,
-    id: i32,
+    pub id: i32,
     known_for_department: String,
-    name: String,
+    pub name: String,
     original_name: String,
     popularity: f32,
     profile_path: Option<String>,
     cast_id: i32,
-    character: String,
+    pub character: String,
     credit_id: String,
-    order: i32,
+    pub order: i32,
 }
 
 #[derive(Deserialize, Debug)]
@@ -81,15 +51,15 @@ pub struct Company {
 pub struct CrewMember {
     adult: bool,
     gender: i32,
-    id: i32,
+    pub id: i32,
     known_for_department: String,
-    name: String,
+    pub name: String,
     original_name: String,
     popularity: f32,
     profile_path: Option<String>,
     credit_id: String,
-    department: String,
-    job: String,
+    pub department: String,
+    pub job: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -168,47 +138,32 @@ pub struct Movie {
     budget: i32,
     genres: Vec<Genre>,
     homepage: String,
-    id: i32,
-    imdb_id: String,
-    original_language: String,
-    original_title: String,
-    overview: String,
+    pub id: i32,
+    pub imdb_id: String,
+    pub original_language: String,
+    pub original_title: String,
+    pub overview: String,
     popularity: f32,
     poster_path: String,
     production_companies: Vec<Company>,
     production_countries: Vec<ProductionCountry>,
     #[serde(deserialize_with = "maybe_date")]
-    release_date: Option<NaiveDate>,
+    pub release_date: Option<NaiveDate>,
     revenue: i32,
-    runtime: i32,
+    pub runtime: i32,
     spoken_languages: Vec<SpokenLanguage>,
     status: String,
     tagline: String,
     video: bool,
     vote_average: f32,
     vote_count: i32,
-    credits: MovieCredits,
-    external_ids: MovieExternalIds,
+    pub credits: MovieCredits,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct MovieCredits {
-    cast: Vec<CastMember>,
-    crew: Vec<CrewMember>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct MovieExternalIds {
-    #[serde(rename = "imdb_id")]
-    imdb: String,
-    #[serde(rename = "wikidata_id")]
-    wikidata: Option<String>,
-    #[serde(rename = "facebook_id")]
-    facebook: Option<String>,
-    #[serde(rename = "instagram_id")]
-    instagram: Option<String>,
-    #[serde(rename = "twitter_id")]
-    twitter: Option<String>,
+    pub cast: Vec<CastMember>,
+    pub crew: Vec<CrewMember>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -229,7 +184,7 @@ pub struct SearchMovie {
     adult: bool,
     backdrop_path: Option<String>,
     genre_ids: Vec<i32>,
-    id: i32,
+    pub id: i32,
     original_language: String,
     pub original_title: String,
     pub overview: String,
@@ -366,14 +321,7 @@ pub struct TvSeries {
     r#type: String,
     vote_average: f32,
     vote_count: i32,
-    aggregate_credits: TvSeriesAggregateCredits,
     external_ids: TvSeriesExternalIds,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct TvSeriesAggregateCredits {
-    cast: Vec<AggregateCastMember>,
-    crew: Vec<AggregateCrewMember>,
 }
 
 #[derive(Deserialize, Debug)]

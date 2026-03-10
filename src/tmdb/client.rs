@@ -171,12 +171,12 @@ fn worker_thread(
             Request::Movie(movie_id) => Response::Movie(make_request(
                 &client,
                 &format!("https://api.themoviedb.org/3/movie/{movie_id}"),
-                &[LANGUAGE, ("append_to_response", "credits,external_ids")],
+                &[LANGUAGE, ("append_to_response", "credits")],
             )),
             Request::TvSeries(series_id) => Response::TvSeries(make_request(
                 &client,
                 &format!("https://api.themoviedb.org/3/tv/{series_id}"),
-                &[LANGUAGE, ("append_to_response", "aggregate_credits,external_ids")],
+                &[LANGUAGE, ("append_to_response", "external_ids")],
             )),
             Request::TvSeason(args) => Response::TvSeason(make_request(
                 &client,
