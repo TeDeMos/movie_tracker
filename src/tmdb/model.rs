@@ -11,7 +11,7 @@ pub struct Paginated<T> {
 #[derive(Deserialize, Debug)]
 pub struct CastMember {
     adult: bool,
-    gender: i32,
+    pub gender: i32,
     pub id: i32,
     known_for_department: String,
     pub name: String,
@@ -21,7 +21,7 @@ pub struct CastMember {
     cast_id: i32,
     pub character: String,
     credit_id: String,
-    pub order: i32,
+    pub order: u32,
 }
 
 #[derive(Deserialize, Debug)]
@@ -50,7 +50,7 @@ pub struct Company {
 #[derive(Deserialize, Debug)]
 pub struct CrewMember {
     adult: bool,
-    gender: i32,
+    pub gender: i32,
     pub id: i32,
     known_for_department: String,
     pub name: String,
@@ -124,13 +124,6 @@ pub struct GuestStar {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Job {
-    credit_id: String,
-    job: String,
-    episode_count: i32,
-}
-
-#[derive(Deserialize, Debug)]
 pub struct Movie {
     adult: bool,
     backdrop_path: String,
@@ -150,10 +143,11 @@ pub struct Movie {
     #[serde(deserialize_with = "maybe_date")]
     pub release_date: Option<NaiveDate>,
     revenue: i32,
-    pub runtime: i32,
+    pub runtime: u32,
     spoken_languages: Vec<SpokenLanguage>,
     status: String,
     tagline: String,
+    pub title: String,
     video: bool,
     vote_average: f32,
     vote_count: i32,
@@ -170,13 +164,6 @@ pub struct MovieCredits {
 pub struct ProductionCountry {
     iso_3166_1: String,
     name: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Role {
-    credit_id: String,
-    character: String,
-    episode_count: i32,
 }
 
 #[derive(Deserialize, Debug)]

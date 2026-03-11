@@ -2,11 +2,11 @@ mod model;
 
 use {
     crate::{
-        db::model::{Job, Movie},
-        tmdb::model::Movie as ApiMovie,
+        db::model::{Cast, Crew, Movie, Person},
+        tmdb::model as api,
     },
     directories::ProjectDirs,
-    rusqlite::{Connection, OptionalExtension, Result},
+    rusqlite::{Connection, Result},
     std::fs,
 };
 
@@ -22,52 +22,39 @@ impl Database {
         Ok(Self(connection))
     }
 
-    pub fn get_movie(&self, id: i32) -> Result<Option<Movie>> {
-        self.0.query_one("select * from movies where id = ?1", [id], Movie::try_from_row).optional()
+    // pub fn get_movie(&self, id: i32) -> Result<Option<Movie>> {
+    //     self.0.query_one("select * from movies where id = ?1", [id],
+    // Movie::try_from_row).optional() }
+
+    pub fn movie_exists(&self, id: i32) -> Result<bool> {
+        self.0.prepare("select 1 from movies where id = ?1")?.exists([id])
     }
 
-    pub fn insert_movie(&mut self, api_movie: ApiMovie) -> Result<()> {
+    pub fn insert_movie(&mut self, api_movie: &api::Movie) -> Result<()> {
         let tx = self.0.transaction()?;
 
-        tx.execute(
-            "insert into movies (id, imdb_id, language, title, overview, release_date, runtime) \
-             values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            (
-                api_movie.id,
-                api_movie.imdb_id,
-                api_movie.original_language,
-                api_movie.original_title,
-                (!api_movie.overview.is_empty()).then_some(api_movie.overview),
-                api_movie.release_date,
-                api_movie.runtime,
-            ),
-        )?;
+        let movie = Movie::from_api_movie(api_movie);
+        tx.execute(Movie::INSERT, movie.params())?;
+        
+        {
+            let mut add_person = tx.prepare(Person::UPSERT)?;
+            let mut add_cast = tx.prepare(Cast::INSERT)?;
+            let mut crew_insert = tx.prepare(Crew::UPSERT)?;
 
-        let mut people_insert = tx
-            .prepare("insert into people (id, name) values (?1, ?2) on conflict (id) do nothing")?;
-        let mut cast_insert = tx.prepare(
-            "insert into cast (movie_id, person_id, character, credit_order) values (?1, ?2, ?3, \
-             ?4)",
-        )?;
-        let mut crew_insert = tx.prepare(
-            "insert into crew (movie_id, person_id, job) values (?1, ?2, ?3) on conflict \
-             (movie_id, person_id, job) do nothing",
-        )?;
+            for c in &api_movie.credits.cast {
+                add_person.execute(Person::from_api_cast_member(c).params())?;
+                add_cast.execute(Cast::from_api_movie_and_cast_member(api_movie, c).params())?;
+            }
 
-        for c in &api_movie.credits.cast {
-            people_insert.execute((c.id, &c.name))?;
-            cast_insert.execute((api_movie.id, c.id, &c.character, c.order))?;
+            for c in &api_movie.credits.crew {
+                let Some(crew) = Crew::from_api_movie_and_crew_member(api_movie, c) else {
+                    continue;
+                };
+                add_person.execute(Person::from_api_crew_member(c).params())?;
+                crew_insert.execute(crew.params())?;
+            }
         }
 
-        for c in &api_movie.credits.crew {
-            let Some(job) = Job::from_crew_member(c) else { continue };
-            println!("{}, {}, {job}", c.name, c.job);
-            people_insert.execute((c.id, &c.name))?;
-            crew_insert.execute((api_movie.id, c.id, job))?;
-        }
-        people_insert.finalize()?;
-        cast_insert.finalize()?;
-        crew_insert.finalize()?;
         tx.commit()
     }
 }
