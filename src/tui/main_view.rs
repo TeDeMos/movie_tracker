@@ -1,8 +1,5 @@
 use {
-    crate::{
-        tmdb::client::TmdbClient,
-        tui::{AppAction, KeyResult, main_view::watch_list::WatchList},
-    },
+    crate::tui::{AppAction, main_view::watch_list::WatchList, utils::KeyResult},
     anyhow::Result,
     ratatui::{Frame, crossterm::event::KeyEvent},
 };
@@ -14,7 +11,7 @@ pub enum MainView {
 }
 
 impl MainView {
-    pub fn new() -> Result<Self> { Ok(Self::WatchList(WatchList::new()?)) }
+    pub fn new() -> Result<Self> { WatchList::new().map(Self::WatchList) }
 
     pub fn draw(&mut self, covered: bool, frame: &mut Frame) {
         match self {
@@ -27,6 +24,4 @@ impl MainView {
             MainView::WatchList(w) => w.handle_key(event),
         }
     }
-
-    pub fn handle_client(&mut self, client: &mut TmdbClient) {}
 }

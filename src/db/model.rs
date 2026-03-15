@@ -1,8 +1,21 @@
 use {
     crate::tmdb::model as api,
     chrono::NaiveDate,
-    rusqlite::{Params, ToSql, types::ToSqlOutput},
+    rusqlite::{Error, Params, Row, ToSql, types::ToSqlOutput},
+    std::borrow::Cow,
 };
+
+pub struct MovieDetails {
+    pub imdb_url: String,
+    pub titles: String,
+    pub language: String,
+    pub runtime: String,
+    pub release_date: String,
+    pub overview: String,
+    pub cast: String,
+    pub directors: String,
+    pub previously_watched: String,
+}
 
 #[derive(Copy, Clone)]
 enum MediaId {
@@ -60,39 +73,51 @@ impl ViewingTag {
 }
 
 pub struct Movie<'a> {
-    id: i32,
-    imdb_id: &'a str,
-    original_title: &'a str,
-    title: &'a str,
-    language: &'a str,
-    runtime: u32,
-    release_date: Option<NaiveDate>,
-    overview: Option<&'a str>,
+    pub id: i32,
+    pub imdb_id: Cow<'a, str>,
+    pub original_title: Cow<'a, str>,
+    pub title: Cow<'a, str>,
+    pub language: Cow<'a, str>,
+    pub runtime: u32,
+    pub release_date: Option<NaiveDate>,
+    pub overview: Option<Cow<'a, str>>,
 }
 
 impl<'a> Movie<'a> {
     pub const INSERT: &'static str = "insert into movies (id, imdb_id, original_title, title, \
                                       language, runtime, release_date, overview) values (?1, ?2, \
                                       ?3, ?4, ?5, ?6, ?7, ?8)";
+    pub const SELECT_ID: &'static str = "select id, imdb_id, original_title, title, language, \
+                                         runtime, release_date, overview from movies where id = ?1";
 
     pub fn params(&self) -> impl Params {
         (
-            self.id, self.imdb_id, self.original_title, self.title, self.language, self.runtime,
-            self.release_date, self.overview,
+            self.id, &self.imdb_id, &self.original_title, &self.title, &self.language,
+            &self.runtime, self.release_date, &self.overview,
         )
     }
 
     pub fn from_api_movie(value: &'a api::Movie) -> Self {
         Self {
             id: value.id,
-            imdb_id: &value.imdb_id,
-            original_title: &value.original_title,
-            title: &value.title,
-            language: &value.original_language,
+            imdb_id: Cow::Borrowed(&value.imdb_id),
+            original_title: Cow::Borrowed(&value.original_title),
+            title: Cow::Borrowed(&value.title),
+            language: Cow::Borrowed(&value.original_language),
             runtime: value.runtime,
             release_date: value.release_date,
-            overview: (!value.overview.is_empty()).then_some(&value.overview),
+            overview: (!value.overview.is_empty()).then_some(Cow::Borrowed(&value.overview)),
         }
+    }
+}
+
+impl TryFrom<&Row<'_>> for Movie<'static> {
+    type Error = Error;
+
+    fn try_from(value: &Row<'_>) -> Result<Self, Self::Error> {
+        let (id, imdb_id, original_title, title, language, runtime, release_date, overview) =
+            value.try_into()?;
+        Ok(Self { id, imdb_id, original_title, title, language, runtime, release_date, overview })
     }
 }
 

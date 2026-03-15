@@ -1,4 +1,4 @@
-#![feature(file_buffered)]
+#![feature(file_buffered, never_type)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 

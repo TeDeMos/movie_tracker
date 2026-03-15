@@ -1,8 +1,7 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    prelude::Style,
-    style::Stylize,
+    style::{Style, Stylize},
     widgets::{Block, BorderType, Paragraph},
 };
 

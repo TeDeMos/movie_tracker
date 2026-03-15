@@ -1,14 +1,19 @@
-mod model;
-
 use {
     crate::{
-        db::model::{Cast, Crew, Movie, Person},
+        db::{
+            model::{Cast, Crew, Movie, MovieDetails, Person},
+            utils::TryJoin,
+        },
         tmdb::model as api,
     },
+    chrono::NaiveDate,
     directories::ProjectDirs,
-    rusqlite::{Connection, Result},
-    std::fs,
+    rusqlite::{Connection, OptionalExtension, Result},
+    std::{borrow::Cow, fs},
 };
+
+pub mod model;
+mod utils;
 
 pub struct Database(Connection);
 
@@ -22,12 +27,61 @@ impl Database {
         Ok(Self(connection))
     }
 
-    // pub fn get_movie(&self, id: i32) -> Result<Option<Movie>> {
-    //     self.0.query_one("select * from movies where id = ?1", [id],
-    // Movie::try_from_row).optional() }
-
-    pub fn movie_exists(&self, id: i32) -> Result<bool> {
-        self.0.prepare("select 1 from movies where id = ?1")?.exists([id])
+    pub fn get_movie_details(&self, id: i32) -> Result<Option<MovieDetails>> {
+        let Some(movie) =
+            self.0.prepare(Movie::SELECT_ID)?.query_one([id], |r| Movie::try_from(r)).optional()?
+        else {
+            return Ok(None);
+        };
+        let cast = self
+            .0
+            .prepare(
+                "select p.name from people p inner join cast c on p.id = c.person_id where \
+                 c.movie_id = ?1 order by c.credit_order limit 3",
+            )?
+            .query_map([id], |r| r.get(0))?
+            .try_join(", ")?;
+        let directors = self
+            .0
+            .prepare(
+                "select p.name from people p inner join crew c on p.id = c.person_id where \
+                 c.movie_id = ?1 and c.job = 'Director' limit 3",
+            )?
+            .query_map([id], |r| r.get(0))?
+            .try_join(", ")?;
+        let watched: (u32, Option<NaiveDate>) = self
+            .0
+            .prepare("select count(*), max(viewing_date) from viewings where movie_id = ?1")?
+            .query_one([id], |r| r.try_into())?;
+        Ok(Some(MovieDetails {
+            imdb_url: format!("https://www.imdb.com/title/{}", movie.imdb_id),
+            titles: if movie.original_title == movie.title {
+                movie.title.into_owned()
+            } else {
+                format!("{} ({})", movie.title, movie.original_title)
+            },
+            language: movie.language.into_owned(),
+            runtime: if movie.runtime < 60 {
+                format!("{}m", movie.runtime)
+            } else {
+                format!("{}h {}m", movie.runtime / 60, movie.runtime % 60)
+            },
+            release_date: match movie.release_date {
+                Some(d) => d.format("%Y-%m-%d").to_string(),
+                None => "Unknown".into(),
+            },
+            overview: match movie.overview {
+                Some(o) => o.into_owned(),
+                None => "No overview".into(),
+            },
+            cast,
+            directors,
+            previously_watched: match watched {
+                (_, None) => "No".into(),
+                (1, Some(d)) => format!("On {}", d.format("%Y-%m-%d")),
+                (c, Some(d)) => format!("{c} times, last one on {}", d.format("%Y-%m-%d")),
+            },
+        }))
     }
 
     pub fn insert_movie(&mut self, api_movie: &api::Movie) -> Result<()> {
@@ -35,7 +89,7 @@ impl Database {
 
         let movie = Movie::from_api_movie(api_movie);
         tx.execute(Movie::INSERT, movie.params())?;
-        
+
         {
             let mut add_person = tx.prepare(Person::UPSERT)?;
             let mut add_cast = tx.prepare(Cast::INSERT)?;

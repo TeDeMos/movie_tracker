@@ -1,15 +1,16 @@
 use {
-    crate::{
-        tmdb::client::TmdbClient,
-        tui::{
-            AppAction, KeyResult,
+    crate::tui::{
+        AppAction, Context,
+        popup::paginated_search::{
             details::Details,
-            results::{ResultsAction, SearchMovieResults},
+            results::{Results, ResultsAction},
             search::Search,
-            title::Title,
-            utils::EventExt,
+            search_type::SearchType,
         },
+        title::Title,
+        utils::{EventExt, KeyResult},
     },
+    anyhow::Result,
     ratatui::{
         Frame,
         crossterm::event::{KeyCode, KeyEvent},
@@ -17,50 +18,54 @@ use {
     },
 };
 
-pub struct AddMovie {
-    current_window: AddMovieWindow,
+mod details;
+mod results;
+mod search;
+mod search_type;
+
+pub struct PaginatedSearch<T: SearchType> {
+    current_window: Window,
     search: Search,
-    results: SearchMovieResults,
+    results: Results<T>,
     details: Details,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
-enum AddMovieWindow {
+enum Window {
     Search,
     Results,
 }
 
-impl AddMovie {
+impl<T: SearchType> PaginatedSearch<T> {
     pub fn new() -> Self {
-        let current_window = AddMovieWindow::Search;
+        let current_window = Window::Search;
         let search = Search::new();
-        let results = SearchMovieResults::new();
+        let results = Results::new();
         let details = Details::new();
         Self { current_window, search, results, details }
     }
 
-    pub fn handle_key(&mut self, event: KeyEvent, client: &mut TmdbClient) -> KeyResult<AppAction> {
+    pub fn handle_key(&mut self, event: KeyEvent, context: Context) -> KeyResult<AppAction> {
         match self.current_window {
-            AddMovieWindow::Search => self
+            Window::Search => self
                 .search
                 .handle_key(event)
-                .handle_action(|_| {
-                    if self.results.search(self.search.query(), client) {
-                        self.current_window = AddMovieWindow::Results;
+                .on_action(|_| {
+                    if self.results.search(self.search.query(), context) {
+                        self.current_window = Window::Results;
                     }
-                    None
                 })
-                .handle_propagate(|event| match event.code {
+                .or_handle_key_with(|event| match event.code {
                     KeyCode::Char('k') if event.control() => {
-                        self.current_window = AddMovieWindow::Results;
+                        self.current_window = Window::Results;
                         KeyResult::Consumed
                     },
-                    _ => KeyResult::Propagate(event),
+                    _ => event.into(),
                 }),
-            AddMovieWindow::Results => self
+            Window::Results => self
                 .results
-                .handle_key(event, client)
-                .handle_action(|action| match action {
+                .handle_key(event, context)
+                .and_then_action(|action| match action {
                     ResultsAction::ScrollPreview(d, o) => {
                         self.details.change_offset(d, o);
                         None
@@ -69,19 +74,21 @@ impl AddMovie {
                         self.details.reset_offset();
                         None
                     },
-                    ResultsAction::Select => Some(AppAction::HidePopup),
+                    ResultsAction::Select(popup) => Some(popup.into()),
                 })
-                .handle_propagate(|event| match event.code {
+                .or_handle_key(|event| match event.code {
                     KeyCode::Char('j') if event.control() => {
-                        self.current_window = AddMovieWindow::Search;
+                        self.current_window = Window::Search;
                         KeyResult::Consumed
                     },
-                    _ => KeyResult::Propagate(event),
+                    _ => event.into(),
                 }),
         }
     }
 
-    pub fn handle_client(&mut self, client: &mut TmdbClient) { self.results.handle_client(client); }
+    pub fn handle_client(&mut self, context: Context) -> Result<()> {
+        self.results.handle_client(context)
+    }
 
     pub fn draw(&mut self, rect: Rect, frame: &mut Frame) {
         let [title, results_details, search] =
@@ -93,8 +100,8 @@ impl AddMovie {
             .areas(results_details);
 
         Title("Add movie").draw(title, frame);
-        self.results.draw(self.current_window == AddMovieWindow::Results, results, frame);
-        self.details.draw(self.results.overview(), details, frame);
-        self.search.draw(self.current_window == AddMovieWindow::Search, search, frame);
+        self.results.draw(self.current_window == Window::Results, results, frame);
+        self.details.draw(self.results.selected(), details, frame);
+        self.search.draw(self.current_window == Window::Search, search, frame);
     }
 }

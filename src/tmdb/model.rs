@@ -40,6 +40,14 @@ pub struct CastMemberEpisode {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct Collection {
+    backdrop_path: String,
+    id: i32,
+    name: String,
+    poster_path: String,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct Company {
     id: i32,
     logo_path: Option<String>,
@@ -127,7 +135,7 @@ pub struct GuestStar {
 pub struct Movie {
     adult: bool,
     backdrop_path: String,
-    belongs_to_collection: Option<String>,
+    belongs_to_collection: Option<Collection>,
     budget: i32,
     genres: Vec<Genre>,
     homepage: String,
@@ -172,14 +180,14 @@ pub struct SearchMovie {
     backdrop_path: Option<String>,
     genre_ids: Vec<i32>,
     pub id: i32,
-    original_language: String,
+    pub original_language: String,
     pub original_title: String,
     pub overview: String,
     popularity: f32,
     poster_path: Option<String>,
     #[serde(deserialize_with = "maybe_date")]
     pub release_date: Option<NaiveDate>,
-    title: String,
+    pub title: String,
     video: bool,
     vote_average: f32,
     vote_count: i32,
@@ -190,16 +198,16 @@ pub struct SearchTv {
     adult: bool,
     backdrop_path: Option<String>,
     genre_ids: Vec<i32>,
-    id: i32,
+    pub id: i32,
     origin_country: Vec<String>,
-    original_language: String,
-    original_name: String,
-    overview: String,
+    pub original_language: String,
+    pub original_name: String,
+    pub overview: String,
     popularity: f32,
     poster_path: Option<String>,
     #[serde(deserialize_with = "maybe_date")]
-    first_air_date: Option<NaiveDate>,
-    name: String,
+    pub first_air_date: Option<NaiveDate>,
+    pub name: String,
     vote_average: f32,
     vote_count: i32,
 }

@@ -1,5 +1,5 @@
 use {
-    crate::tui::{KeyResult, utils::EventExt},
+    crate::tui::utils::{EventExt, IntoAction, KeyResult},
     ratatui::{
         Frame,
         crossterm::event::{KeyCode, KeyEvent},
@@ -37,7 +37,7 @@ impl Search {
 
     pub fn handle_key(&mut self, event: KeyEvent) -> KeyResult<Searched> {
         match event.code {
-            KeyCode::Enter if event.no_modifiers() => KeyResult::Action(Searched),
+            KeyCode::Enter if event.no_modifiers() => Searched.action(),
             KeyCode::Backspace if event.no_modifiers() => {
                 _ = self.query.pop();
                 self.chars = self.chars.saturating_sub(1);
@@ -48,7 +48,7 @@ impl Search {
                 self.chars += 1;
                 KeyResult::Consumed
             },
-            _ => KeyResult::Propagate(event),
+            _ => event.into(),
         }
     }
 

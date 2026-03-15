@@ -1,14 +1,15 @@
 use {
     crate::{
         db::Database,
-        tmdb::client::TmdbClient,
+        tmdb::{client::TmdbClient, utils::ApiResult},
         tui::{
             main_view::MainView,
             popup::Popup,
-            utils::{EventExt, KeyResult},
+            utils::{EventExt, IntoAction, KeyResult},
         },
     },
     anyhow::Result,
+    derive_more::From,
     ratatui::{
         DefaultTerminal, Frame,
         crossterm::event::{self, KeyCode, KeyEvent},
@@ -16,11 +17,8 @@ use {
     std::time::Duration,
 };
 
-mod details;
 mod main_view;
 mod popup;
-mod results;
-mod search;
 mod title;
 mod utils;
 
@@ -29,6 +27,11 @@ pub struct App {
     popup: Option<Popup>,
     database: Database,
     client: TmdbClient,
+}
+
+pub struct Context<'a> {
+    pub database: &'a mut Database,
+    pub client: &'a mut TmdbClient,
 }
 
 impl App {
@@ -52,7 +55,9 @@ impl App {
                 return Ok(());
             }
 
-            self.handle_client();
+            if let Err(e) = self.handle_client() {
+                self.popup = Some(Popup::warning(e));
+            }
         }
     }
 
@@ -67,14 +72,15 @@ impl App {
     }
 
     fn handle_key(&mut self, event: KeyEvent) -> Option<AppAction> {
+        let context = Context { database: &mut self.database, client: &mut self.client };
         let result = match &mut self.popup {
-            Some(popup) => popup.handle_key(event, &mut self.client),
+            Some(popup) => popup.handle_key(event, context),
             None => self.main_view.handle_key(event),
         };
         result
-            .handle_propagate(|e| match e.code {
-                KeyCode::Char('q') if event.no_modifiers() => KeyResult::Action(AppAction::Quit),
-                KeyCode::Char('c') if event.control() => KeyResult::Action(AppAction::Quit),
+            .or_handle_key(|e| match e.code {
+                KeyCode::Char('q') if event.no_modifiers() => AppAction::Quit.action(),
+                KeyCode::Char('c') if event.control() => AppAction::Quit.action(),
                 _ => KeyResult::Consumed,
             })
             .into_action()
@@ -89,10 +95,11 @@ impl App {
         false
     }
 
-    fn handle_client(&mut self) {
+    fn handle_client(&mut self) -> Result<()> {
+        let context = Context { database: &mut self.database, client: &mut self.client };
         match &mut self.popup {
-            Some(popup) => popup.handle_client(&mut self.client),
-            None => self.main_view.handle_client(&mut self.client),
+            Some(popup) => popup.handle_client(context),
+            None => Ok(()),
         }
     }
 
@@ -105,6 +112,7 @@ impl App {
     }
 }
 
+#[derive(From)]
 enum AppAction {
     ShowPopup(Popup),
     HidePopup,

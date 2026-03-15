@@ -1,5 +1,8 @@
 use {
-    crate::tui::utils::{ScrollDirection, ScrollOffset},
+    crate::tui::{
+        popup::paginated_search::search_type::SearchType,
+        utils::{ScrollDirection, ScrollOffset},
+    },
     ratatui::{
         Frame,
         layout::Rect,
@@ -17,15 +20,15 @@ pub struct Details {
 impl Details {
     pub fn new() -> Self { Self { half_view: 0, max_offset: 0, list_state: ListState::default() } }
 
-    pub fn draw(&mut self, overview: Option<&str>, rect: Rect, frame: &mut Frame) {
+    pub fn draw<T: SearchType>(&mut self, item: Option<&T>, rect: Rect, frame: &mut Frame) {
         let block = Block::bordered().merge_borders(MergeStrategy::Fuzzy).title("Details");
         frame.render_widget(&block, rect);
 
         let inner = block.inner(rect);
         self.half_view = (inner.height / 2) as _;
         let offset = self.list_state.offset_mut();
-        if let Some(s) = overview {
-            let lines = textwrap::wrap(s, inner.width as usize);
+        if let Some(overview) = item.and_then(SearchType::details) {
+            let lines = textwrap::wrap(&overview, inner.width as usize);
             self.max_offset = lines.len().saturating_sub(inner.height as _);
             *offset = self.max_offset.min(*offset);
             let list = List::new(lines);

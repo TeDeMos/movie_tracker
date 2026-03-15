@@ -1,10 +1,14 @@
 use {
-    crate::tui::{AppAction, KeyResult, popup::Popup},
+    crate::tui::{
+        AppAction,
+        popup::Popup,
+        utils::{IntoAction, KeyResult},
+    },
     anyhow::Result,
     ratatui::{
         Frame,
         crossterm::event::{KeyCode, KeyEvent},
-        prelude::{Color, Style},
+        style::{Color, Style},
         widgets::{List, ListState},
     },
     std::{fs::File, io::BufRead},
@@ -53,8 +57,9 @@ impl WatchList {
                 self.expanded = self.expanded.is_none_or(|e| e != s).then_some(s);
                 KeyResult::Consumed
             },
-            KeyCode::Char('m') => KeyResult::Action(AppAction::ShowPopup(Popup::add_movie())),
-            _ => KeyResult::Propagate(event),
+            KeyCode::Char('m') => Popup::search_movie().show().action(),
+            KeyCode::Char('s') => Popup::search_tv().show().action(),
+            _ => event.into(),
         }
     }
 }

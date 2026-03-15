@@ -10,7 +10,9 @@ use {
     thiserror::Error,
 };
 
-pub const DEBUG: &str = "/home/tedem/dev/RustroverProjects/movie_tracker/src/temp.json";
+const DEBUG: &str = "/home/tedem/dev/RustroverProjects/movie_tracker/src/temp.json";
+
+pub type ApiResult<T> = Result<T, DebugJsonError>;
 
 #[derive(Error, Debug)]
 pub enum DebugJsonError {
@@ -25,11 +27,11 @@ pub enum DebugJsonError {
 }
 
 pub trait ResponseExt {
-    fn debug_json<T: DeserializeOwned>(self) -> Result<T, DebugJsonError>;
+    fn debug_json<T: DeserializeOwned>(self) -> ApiResult<T>;
 }
 
 impl ResponseExt for Response {
-    fn debug_json<T: DeserializeOwned>(self) -> Result<T, DebugJsonError> {
+    fn debug_json<T: DeserializeOwned>(self) -> ApiResult<T> {
         let text = self.text()?;
         let value: Value = serde_json::from_str(&text)?;
         let pretty = serde_json::to_string_pretty(&value)?;
@@ -40,7 +42,7 @@ impl ResponseExt for Response {
 
 pub fn maybe_date<'de, D>(deserializer: D) -> Result<Option<NaiveDate>, D::Error>
 where D: Deserializer<'de> {
-    match Option::<String>::deserialize(deserializer)?.as_deref() {
+    match Option::<&str>::deserialize(deserializer)? {
         None | Some("") => Ok(None),
         Some(s) => NaiveDate::parse_from_str(s, "%Y-%m-%d").map(Some).map_err(D::Error::custom),
     }

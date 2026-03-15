@@ -1,56 +1,23 @@
 use {
-    crate::{
-        tmdb::{
-            client::TmdbClient,
-            model::{Paginated, SearchMovie},
-        },
-        tui::utils::{EventExt, KeyResult, ScrollDirection, ScrollOffset},
+    crate::tui::{
+        Context,
+        popup::{Popup, paginated_search::search_type::SearchType},
+        utils::{EventExt, IntoAction, KeyResult, ScrollDirection, ScrollOffset},
     },
+    anyhow::Result,
     ratatui::{
         Frame,
         crossterm::event::{KeyCode, KeyEvent},
         layout::Rect,
-        prelude::{Color, Line, Style, Stylize, Text},
+        style::{Color, Style, Stylize},
         symbols::merge::MergeStrategy,
+        text::{Line, Text},
         widgets::{Block, List, ListItem, ListState},
     },
     textwrap::Options,
 };
 
-pub trait ResultItem: Sized {
-    fn title(&self) -> impl AsRef<str>;
-    fn overview(&self) -> Option<&str>;
-    fn start_search(client: &mut TmdbClient, query: &str, page: i32) -> usize;
-    fn get_results(client: &mut TmdbClient, id: usize) -> Option<Paginated<Self>>;
-}
-
-impl ResultItem for SearchMovie {
-    fn title(&self) -> impl AsRef<str> {
-        match self.release_date {
-            Some(d) => format!("{} ({d})", self.original_title),
-            None => format!("{}, (?)", self.original_title),
-        }
-    }
-
-    fn overview(&self) -> Option<&str> {
-        match self.overview.as_str() {
-            "" => None,
-            s => Some(s),
-        }
-    }
-
-    fn start_search(client: &mut TmdbClient, query: &str, page: i32) -> usize {
-        client.search_movie(query.to_string(), page)
-    }
-
-    fn get_results(client: &mut TmdbClient, id: usize) -> Option<Paginated<Self>> {
-        client.search_movie_results(id).map(Result::unwrap)
-    }
-}
-
-pub type SearchMovieResults = Results<SearchMovie>;
-
-pub struct Results<T: ResultItem> {
+pub struct Results<T: SearchType> {
     items: Vec<T>,
     next_page: i32,
     total: usize,
@@ -59,7 +26,7 @@ pub struct Results<T: ResultItem> {
     loading: Option<usize>,
 }
 
-impl<T: ResultItem> Results<T> {
+impl<T: SearchType> Results<T> {
     pub fn new() -> Self {
         Self {
             items: Vec::new(),
@@ -71,9 +38,7 @@ impl<T: ResultItem> Results<T> {
         }
     }
 
-    pub fn overview(&self) -> Option<&str> {
-        self.items.get(self.list_state.selected()?)?.overview()
-    }
+    pub fn selected(&self) -> Option<&T> { self.items.get(self.list_state.selected()?) }
 
     pub fn draw(&mut self, active: bool, rect: Rect, frame: &mut Frame) {
         let block = Block::bordered().merge_borders(MergeStrategy::Fuzzy).title(self.title());
@@ -107,7 +72,7 @@ impl<T: ResultItem> Results<T> {
             .enumerate()
             .map(move |(i, t)| {
                 Text::from(textwrap::fill(
-                    t.title().as_ref(),
+                    &t.display(),
                     Options::new(width - FILL - 2)
                         .initial_indent(&format!("{:>FILL$}. ", i + 1))
                         .subsequent_indent(SPACES),
@@ -137,28 +102,22 @@ impl<T: ResultItem> Results<T> {
         }
     }
 
-    pub fn handle_key(
-        &mut self, event: KeyEvent, client: &mut TmdbClient,
-    ) -> KeyResult<ResultsAction> {
+    pub fn handle_key(&mut self, event: KeyEvent, context: Context) -> KeyResult<ResultsAction> {
         match event.code {
             KeyCode::Char('j') if event.no_modifiers() =>
                 self.change_selection(ScrollDirection::Down),
             KeyCode::Char('k') if event.no_modifiers() =>
                 self.change_selection(ScrollDirection::Up),
-            KeyCode::Char('J') if event.shift_or_no_modifiers() => KeyResult::Action(
-                ResultsAction::ScrollPreview(ScrollDirection::Down, ScrollOffset::One),
-            ),
-            KeyCode::Char('K') if event.shift_or_no_modifiers() => KeyResult::Action(
-                ResultsAction::ScrollPreview(ScrollDirection::Up, ScrollOffset::One),
-            ),
-            KeyCode::Char('d') if event.control() => KeyResult::Action(
-                ResultsAction::ScrollPreview(ScrollDirection::Down, ScrollOffset::HalfView),
-            ),
-            KeyCode::Char('u') if event.control() => KeyResult::Action(
-                ResultsAction::ScrollPreview(ScrollDirection::Up, ScrollOffset::HalfView),
-            ),
-            KeyCode::Enter => self.select(client),
-            _ => KeyResult::Propagate(event),
+            KeyCode::Char('J') if event.shift_or_no_modifiers() =>
+                ResultsAction::ScrollPreview(ScrollDirection::Down, ScrollOffset::One).action(),
+            KeyCode::Char('K') if event.shift_or_no_modifiers() =>
+                ResultsAction::ScrollPreview(ScrollDirection::Up, ScrollOffset::One).action(),
+            KeyCode::Char('d') if event.control() =>
+                ResultsAction::ScrollPreview(ScrollDirection::Down, ScrollOffset::HalfView).action(),
+            KeyCode::Char('u') if event.control() =>
+                ResultsAction::ScrollPreview(ScrollDirection::Up, ScrollOffset::HalfView).action(),
+            KeyCode::Enter => self.select(context),
+            _ => event.into(),
         }
     }
 
@@ -172,23 +131,23 @@ impl<T: ResultItem> Results<T> {
             KeyResult::Consumed
         } else {
             self.list_state.select(Some(next));
-            KeyResult::Action(ResultsAction::ResetPreview)
+            ResultsAction::ResetPreview.action()
         }
     }
 
-    fn select(&mut self, client: &mut TmdbClient) -> KeyResult<ResultsAction> {
-        if self.loading.is_none()
-            && let Some(s) = self.list_state.selected()
-            && s >= self.items.len()
-        {
-            self.loading = Some(client.search_movie(self.query.clone(), self.next_page));
-            KeyResult::Consumed
+    fn select(&mut self, context: Context) -> KeyResult<ResultsAction> {
+        if self.loading.is_some() {
+            return KeyResult::Consumed;
+        }
+        if let Some(t) = self.items.get(self.list_state.selected().unwrap()) {
+            ResultsAction::Select(t.details_popup(context)).action()
         } else {
-            KeyResult::Action(ResultsAction::Select)
+            self.loading = Some(T::search(context.client, self.query.clone(), self.next_page));
+            KeyResult::Consumed
         }
     }
 
-    pub fn search(&mut self, query: &str, client: &mut TmdbClient) -> bool {
+    pub fn search(&mut self, query: &str, context: Context) -> bool {
         if self.loading.is_some() || query == self.query {
             return false;
         }
@@ -198,24 +157,25 @@ impl<T: ResultItem> Results<T> {
         query.clone_into(&mut self.query);
         *self.list_state.offset_mut() = 0;
         self.list_state.select(Some(0));
-        self.loading = Some(T::start_search(client, query, 1));
+        self.loading = Some(T::search(context.client, self.query.clone(), 1));
         true
     }
 
-    pub fn handle_client(&mut self, client: &mut TmdbClient) {
-        if let Some(id) = self.loading
-            && let Some(results) = T::get_results(client, id)
-        {
-            self.items.extend(results.results);
-            self.next_page = results.page + 1;
-            self.total = results.total_results.try_into().unwrap();
-            self.loading = None;
-        }
+    pub fn handle_client(&mut self, context: Context) -> Result<()> {
+        let results = match self.loading.and_then(|id| T::results(context.client, id)) {
+            Some(results) => results?,
+            None => return Ok(()),
+        };
+        self.items.extend(results.results);
+        self.next_page = results.page + 1;
+        self.total = results.total_results as _;
+        self.loading = None;
+        Ok(())
     }
 }
 
 pub enum ResultsAction {
     ScrollPreview(ScrollDirection, ScrollOffset),
     ResetPreview,
-    Select,
+    Select(Popup),
 }

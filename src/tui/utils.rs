@@ -7,21 +7,33 @@ pub enum KeyResult<T> {
 }
 
 impl<T> KeyResult<T> {
-    pub fn handle_action<U>(self, f: impl FnOnce(T) -> Option<U>) -> KeyResult<U> {
+    pub fn and_then_action<U>(self, f: impl FnOnce(T) -> Option<U>) -> KeyResult<U> {
         match self {
-            KeyResult::Consumed => KeyResult::Consumed,
-            KeyResult::Action(action) => match f(action) {
+            Self::Consumed => KeyResult::Consumed,
+            Self::Action(action) => match f(action) {
                 Some(u) => KeyResult::Action(u),
                 None => KeyResult::Consumed,
             },
-            KeyResult::Propagate(event) => KeyResult::Propagate(event),
+            Self::Propagate(event) => KeyResult::Propagate(event),
         }
     }
 
-    pub fn handle_propagate(self, f: impl FnOnce(KeyEvent) -> Self) -> Self {
+    pub fn on_action(self, f: impl FnOnce(T)) -> KeyResult<!> {
         match self {
-            KeyResult::Propagate(event) => f(event),
-            _ => self,
+            Self::Consumed => KeyResult::Consumed,
+            Self::Action(action) => {
+                f(action);
+                KeyResult::Consumed
+            },
+            Self::Propagate(event) => KeyResult::Propagate(event),
+        }
+    }
+
+    pub fn or_handle_key(self, f: impl FnOnce(KeyEvent) -> Self) -> Self {
+        match self {
+            Self::Consumed => Self::Consumed,
+            Self::Action(t) => Self::Action(t),
+            Self::Propagate(event) => f(event),
         }
     }
 
@@ -31,6 +43,28 @@ impl<T> KeyResult<T> {
             _ => None,
         }
     }
+}
+
+impl KeyResult<!> {
+    pub fn or_handle_key_with<T>(self, f: impl FnOnce(KeyEvent) -> KeyResult<T>) -> KeyResult<T> {
+        match self {
+            Self::Consumed => KeyResult::Consumed,
+            Self::Action(n) => n,
+            Self::Propagate(event) => f(event),
+        }
+    }
+}
+
+impl<T> From<KeyEvent> for KeyResult<T> {
+    fn from(value: KeyEvent) -> Self { Self::Propagate(value) }
+}
+
+pub trait IntoAction: Sized {
+    fn action(self) -> KeyResult<Self>;
+}
+
+impl<T> IntoAction for T {
+    fn action(self) -> KeyResult<T> { KeyResult::Action(self) }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]

@@ -1,13 +1,12 @@
 use {
     crate::tmdb::{
         model::{Movie, Paginated, SearchMovie, SearchTv, TvEpisode, TvSeason, TvSeries},
-        utils::{DebugJsonError, ResponseExt},
+        utils::{ApiResult, ResponseExt},
     },
     derive_more::TryInto,
     reqwest::blocking::Client,
     serde::de::DeserializeOwned,
     std::{
-        result,
         sync::mpsc::{self, Receiver, Sender, TryRecvError},
         thread,
     },
@@ -47,17 +46,15 @@ struct RequestWrapper {
     request: Request,
 }
 
-type Result<T> = result::Result<T, DebugJsonError>;
-
 #[expect(clippy::large_enum_variant)]
 #[derive(TryInto)]
 enum Response {
-    SearchMovie(Result<Paginated<SearchMovie>>),
-    SearchTv(Result<Paginated<SearchTv>>),
-    Movie(Result<Movie>),
-    TvSeries(Result<TvSeries>),
-    TvSeason(Result<TvSeason>),
-    TvEpisode(Result<TvEpisode>),
+    SearchMovie(ApiResult<Paginated<SearchMovie>>),
+    SearchTv(ApiResult<Paginated<SearchTv>>),
+    Movie(ApiResult<Movie>),
+    TvSeries(ApiResult<TvSeries>),
+    TvSeason(ApiResult<TvSeason>),
+    TvEpisode(ApiResult<TvEpisode>),
 }
 
 struct ResponseWrapper {
@@ -114,41 +111,42 @@ impl TmdbClient {
         id
     }
 
-    pub fn search_movie_results(&mut self, id: usize) -> Option<Result<Paginated<SearchMovie>>> {
-        self.receive_response(id).and_then(|r| r.try_into().ok())
+    pub fn search_movie_results(&mut self, id: usize) -> Option<ApiResult<Paginated<SearchMovie>>> {
+        self.receive_response(id)
     }
 
-    pub fn search_tv_results(&mut self, id: usize) -> Option<Result<Paginated<SearchTv>>> {
-        self.receive_response(id).and_then(|r| r.try_into().ok())
+    pub fn search_tv_results(&mut self, id: usize) -> Option<ApiResult<Paginated<SearchTv>>> {
+        self.receive_response(id)
     }
 
-    pub fn movie_results(&mut self, id: usize) -> Option<Result<Movie>> {
-        self.receive_response(id).and_then(|r| r.try_into().ok())
+    pub fn movie_results(&mut self, id: usize) -> Option<ApiResult<Movie>> {
+        self.receive_response(id)
     }
 
-    pub fn tv_series_results(&mut self, id: usize) -> Option<Result<TvSeries>> {
-        self.receive_response(id).and_then(|r| r.try_into().ok())
+    pub fn tv_series_results(&mut self, id: usize) -> Option<ApiResult<TvSeries>> {
+        self.receive_response(id)
     }
 
-    pub fn tv_season_results(&mut self, id: usize) -> Option<Result<TvSeason>> {
-        self.receive_response(id).and_then(|r| r.try_into().ok())
+    pub fn tv_season_results(&mut self, id: usize) -> Option<ApiResult<TvSeason>> {
+        self.receive_response(id)
     }
 
-    pub fn tv_episode_results(&mut self, id: usize) -> Option<Result<TvEpisode>> {
-        self.receive_response(id).and_then(|r| r.try_into().ok())
+    pub fn tv_episode_results(&mut self, id: usize) -> Option<ApiResult<TvEpisode>> {
+        self.receive_response(id)
     }
 
-    fn receive_response(&self, id: usize) -> Option<Response> {
-        loop {
+    fn receive_response<T: TryFrom<Response>>(&self, id: usize) -> Option<T> {
+        let response = loop {
             match self.response_receiver.try_recv() {
                 Ok(wrapper) =>
                     if wrapper.id == id {
-                        return Some(wrapper.response);
+                        break wrapper.response;
                     },
                 Err(TryRecvError::Empty) => return None,
                 Err(TryRecvError::Disconnected) => panic!("Worker thread disconnected"),
             }
-        }
+        };
+        response.try_into().ok()
     }
 }
 
@@ -202,7 +200,7 @@ fn worker_thread(
 
 fn make_request<T: DeserializeOwned>(
     client: &Client, url: &str, query: &[(&str, &str)],
-) -> Result<T> {
+) -> ApiResult<T> {
     client
         .get(url)
         .query(query)
